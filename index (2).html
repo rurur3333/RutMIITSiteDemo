@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Демо: волны зачисления на платное место</title>
+<style>
+  :root{
+    --ink:#16181d; --muted:#8a8f98; --link:#1e90ff; --line:#ffffff;
+    --green:#d4f5d9; --yellow:#fff3b8; --orange:#ffd3a1;
+    --gray:#e6e8eb; --red:#fbd3d3; --blue:#d6e6fb; --violet:#e5dcf6;
+    --accent:#0b57d0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","Open Sans",system-ui,-apple-system,Arial,sans-serif;color:var(--ink);background:#f3f4f6}
+  .wrap{max-width:860px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 0 1px #e3e5e8}
+
+  /* ---------- панель времени ---------- */
+  .clock{padding:28px 32px 20px;border-bottom:1px solid #e3e5e8;position:sticky;top:0;background:#fff;z-index:5}
+  .phase{font-size:15px;color:var(--muted);margin:0 0 6px}
+  .big{display:flex;gap:28px;align-items:baseline;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+  .unit{display:flex;align-items:baseline;gap:8px}
+  .unit b{font-size:clamp(44px,9vw,76px);font-weight:600;letter-spacing:-.02em;line-height:1}
+  .unit span{font-size:18px;color:var(--muted)}
+  .big.urgent b{color:#c2410c}
+  .big.done b{color:var(--muted)}
+  .controls{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;margin-top:18px}
+  .controls button{font:inherit;font-size:14px;padding:7px 14px;border:1px solid #c9cdd3;background:#fff;border-radius:6px;cursor:pointer}
+  .controls button:hover{background:#f3f4f6}
+  .controls button:focus-visible,.ask button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .speed{display:flex;align-items:center;gap:10px;font-size:14px;color:#454a52;flex:1;min-width:260px}
+  .speed input{flex:1;accent-color:var(--accent)}
+  .speed output{min-width:118px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .auto{font-size:14px;color:#454a52;display:flex;gap:6px;align-items:center}
+
+  /* ---------- список ---------- */
+  .list-head{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;font-size:22px;border-bottom:1px solid #e3e5e8}
+  .list-head small{font-size:14px;color:var(--muted)}
+  .row{display:grid;grid-template-columns:56px 1fr auto;align-items:center;padding:18px 32px 18px 0;border-bottom:1px solid var(--line);
+       transition:background-color .5s ease, max-height .6s ease, opacity .5s ease, padding .6s ease;max-height:300px;overflow:hidden}
+  .row .n{text-align:center;font-size:16px}
+  .row .meta{line-height:1.45;font-size:16px}
+  .row .meta .k{color:var(--muted)}
+  .row .meta a{color:var(--link);text-decoration:none}
+  .row .score{font-size:16px;text-align:right;white-space:nowrap}
+  .row .tag{display:block;font-size:13px;color:#454a52;margin-top:6px}
+  .row.green{background:var(--green)} .row.yellow{background:var(--yellow)} .row.orange{background:var(--orange)}
+  .row.missed{background:#f6b4b4}
+  .row.gray{background:var(--gray)} .row.red{background:var(--red)} .row.blue{background:var(--blue)} .row.violet{background:var(--violet)}
+  .row.inactive .meta,.row.inactive .score{color:#5b6068}
+  .sect{padding:12px 32px;background:#fff;border-top:1px solid #e3e5e8;font-size:15px;font-weight:600;color:#8c1d1d}
+  .row.leaving{max-height:0;opacity:0;padding-top:0;padding-bottom:0}
+  .row.me{box-shadow:inset 5px 0 0 var(--accent)}
+  .me-badge{display:inline-block;font-size:12px;background:var(--accent);color:#fff;border-radius:4px;padding:1px 7px;margin-left:8px;vertical-align:2px}
+
+  /* ---------- вопрос ---------- */
+  .ask{grid-column:2 / 4;margin-top:14px;padding:16px 18px;background:#fff;border:1px solid #d0d4da;border-radius:8px}
+  .ask p{margin:0 0 6px;font-size:17px;font-weight:600}
+  .ask .sub{font-size:14px;font-weight:400;color:#454a52;margin-bottom:12px}
+  .ask .btns{display:flex;gap:10px;flex-wrap:wrap}
+  .ask button{font:inherit;font-size:15px;padding:9px 22px;border-radius:6px;border:1px solid transparent;cursor:pointer}
+  .btn-yes{background:#1a7f37;color:#fff}.btn-yes:hover{background:#166a2e}
+  .btn-no{background:#fff;color:#a12a2a;border-color:#d9a3a3!important}.btn-no:hover{background:#fdf0f0}
+  .btn-danger{background:#b42323;color:#fff}.btn-danger:hover{background:#971c1c}
+  .btn-back{background:#fff;border-color:#c9cdd3!important;color:var(--ink)}
+  .ask .warn{font-size:16px;font-weight:600;color:#8c1d1d}
+
+  /* ---------- нижняя часть ---------- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;padding:18px 32px;font-size:13px;color:#454a52;border-top:1px solid #e3e5e8}
+  .legend i{display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:1px solid rgba(0,0,0,.08)}
+  @media (max-width:560px){
+    .clock,.list-head,.legend{padding-left:16px;padding-right:16px}
+    .row{grid-template-columns:36px 1fr auto;padding-right:16px}
+    .big{gap:16px}
+  }
+  @media (prefers-reduced-motion:reduce){.row{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="clock" aria-live="off">
+    <p class="phase" id="phase"></p>
+    <div class="big" id="big"></div>
+    <div class="controls">
+      <button id="play">Старт</button>
+      <button id="reset">Сначала</button>
+      <label class="speed">Скорость
+        <input type="range" id="speed" min="0" max="100" value="62">
+        <output id="speedOut"></output>
+      </label>
+      <label class="auto"><input type="checkbox" id="autopause" checked> Пауза, когда появляется вопрос</label>
+    </div>
+  </section>
+
+  <div class="list-head">
+    <span>Конкурсный список — платные места</span>
+    <small id="count"></small>
+  </div>
+  <div id="list"></div>
+
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>Согласие дано, зачислен</span>
+    <span><i style="background:var(--yellow)"></i>Ждёт своей очереди / ответа</span>
+    <span><i style="background:var(--orange)"></i>Не ответил — вторая волна</span>
+    <span><i style="background:var(--gray)"></i>Отозвал заявление</span>
+    <span><i style="background:var(--red)"></i>Договор не подписан</span>
+    <span><i style="background:#f6b4b4"></i>Не успели / отказались</span>
+    <span><i style="background:var(--blue)"></i>Зачислен на другое направление</span>
+    <span><i style="background:var(--violet)"></i>Подал согласие в другой вуз</span>
+  </div>
+
+</div>
+
+<script>
+/* ================= настройки симуляции ================= */
+const MIN = 1, HOUR = 60, DAY = 1440;
+const T0 = 3*DAY + 6*HOUR + 15*MIN;   // сколько осталось до дедлайна (в минутах)
+const WINDOW = 2*DAY;                 // время на нажатие кнопки в каждой волне
+const PROGRAMS = [
+  "Пассажирский комплекс железнодорожного транспорта",
+  "Магистральный транспорт",
+  "Бизнес-аналитика перевозочного процесса",
+  "Грузовая и коммерческая работа",
+  "Транспортный бизнес и логистика",
+  "Цифровые технологии управления транспортными процессами",
+  "Управление международными перевозками"
+];
+
+/* act: 'yes' | 'no' | null (проигнорирует); at — через сколько минут после начала волны */
+const SEED = [
+  {id:1895034, prio:1, score:235, contract:"Да",  status:"enrolled", program:PROGRAMS[4]},
+  {id:1213989, prio:1, score:212, contract:"Да",  status:"enrolled", program:PROGRAMS[2]},
+  {id:1365930, prio:2, score:202, contract:"Да",  status:"enrolled", program:PROGRAMS[0]},
+  {id:2202818, prio:1, score:202, contract:"Да",  status:"enrolled", program:PROGRAMS[4]},
+  {id:2374201, prio:1, score:202, contract:"Да",  status:"enrolled", program:PROGRAMS[1]},
+  {id:2227782, prio:1, score:196, contract:"Да",  status:"enrolled", program:PROGRAMS[5]},
+  {id:2310045, prio:1, score:195, contract:"Нет", status:"pending", me:true, program:PROGRAMS[3]},
+  {id:2401177, prio:1, score:194, contract:"Нет", status:"pending", w1:{act:"yes",at:600}, program:PROGRAMS[6]},
+  {id:1987654, prio:2, score:193, contract:"Нет", status:"pending", w1:{act:"no", at:1500}, program:PROGRAMS[2]},
+  {id:2150032, prio:1, score:192, contract:"Нет", status:"pending", w1:null, w2:{act:"yes",at:300}, program:PROGRAMS[0]},
+  {id:2088811, prio:1, score:191, contract:"Нет", status:"pending", w1:null, w2:null, program:PROGRAMS[5]},
+  {id:2290456, prio:3, score:190, contract:"Нет", status:"pending", w1:{act:"yes",at:2500}, program:PROGRAMS[1]},
+  {id:1774420, prio:1, score:189, contract:"Нет", status:"gray",   note:"Отозвал заявление", program:PROGRAMS[6]},
+  {id:2012345, prio:2, score:188, contract:"Нет", status:"red",    note:"Договор не подписан в срок", program:PROGRAMS[3]},
+  {id:1654321, prio:1, score:187, contract:"Да",  status:"blue",   note:"Зачислен на другое направление", program:PROGRAMS[0]},
+  {id:2399001, prio:2, score:185, contract:"Нет", status:"gray",   note:"Отозвал заявление", program:PROGRAMS[4]},
+  {id:1555888, prio:1, score:183, contract:"Да",  status:"violet", note:"Подал согласие в другой вуз", program:PROGRAMS[2]},
+];
+
+/* ================= состояние ================= */
+let people, sim, playing, lastWave, lastTs, confirmingNo, logItems, paused;
+
+function init(){
+  people = SEED.map(p => ({...p, w1: p.w1, w2: p.w2, responded:false}));
+  sim = 0; playing = false; lastWave = 'wait'; confirmingNo = false; logItems = [];
+  document.getElementById('play').textContent = 'Старт';
+  render(); tickUI();
+}
+
+/* sim = прошедшее время; до дедлайна осталось T0 - sim */
+function waveOf(t){
+  if (t < T0) return 'wait';
+  if (t < T0 + WINDOW) return 'wave1';
+  if (t < T0 + 2*WINDOW) return 'wave2';
+  return 'done';
+}
+const me = () => people.find(p => p.me);
+const meAwaiting = () => {
+  const m = me(); const w = waveOf(sim);
+  return m && ((w==='wave1' && m.status==='pending') || (w==='wave2' && m.status==='orange'));
+};
+
+/* ================= действия ================= */
+function enroll(p){ p.status='enrolled'; p.responded=true; }
+function remove(p, why){
+  if (p.status==='leaving') return;
+  p.prev = p.status; p.status='leaving';
+  render();
+  setTimeout(()=>{ people = people.filter(x=>x!==p); render(); }, 650);
+}
+function userYes(){
+  const m = me(); enroll(m); confirmingNo=false;
+  addLog('Вы дали согласие на платное место — плашка стала зелёной.', true);
+  render();
+}
+function userNoAsk(){ confirmingNo = true; render(); }
+function userNoBack(){ confirmingNo = false; render(); }
+function userNoConfirm(){
+  const m = me(); confirmingNo=false;
+  addLog('Вы отказались от платного места — вас убрали из списка.', true);
+  m.status='missed'; m.reason='no';
+  render();
+}
+
+/* ================= ход времени ================= */
+function advance(newSim){
+  const prevSim = sim;
+  const tAuto = document.getElementById('autopause').checked;
+
+  /* авто-пауза ровно на границе волны */
+  if (tAuto){
+    for (const b of [T0, T0 + WINDOW]){
+      if (prevSim < b && newSim >= b){
+        const wasWave = waveOf(b);   // волна, начинающаяся на этой границе
+        const m = me();
+        const willAsk = !m ? false
+                      : wasWave==='wave1' ? m.status==='pending'
+                      : wasWave==='wave2' ? (m.status==='pending'||m.status==='orange') : false;
+        if (willAsk){ newSim = b; setPlaying(false); break; }
+      }
+    }
+  }
+  sim = newSim;
+
+  const w = waveOf(sim);
+  if (w !== lastWave){
+    const order = ['wait','wave1','wave2','done'];
+    for (let i = order.indexOf(lastWave)+1; i <= order.indexOf(w); i++) enterWave(order[i]);
+    lastWave = w;
+  }
+  /* сценарии остальных участников */
+  if (w==='wave1'){
+    people.forEach(p=>{
+      if (!p.me && p.status==='pending' && p.w1 && sim-T0 >= p.w1.at) applyOther(p, p.w1.act, 1);
+    });
+  }
+  if (w==='wave2'){
+    people.forEach(p=>{
+      if (!p.me && p.status==='orange' && p.w2 && sim-(T0+WINDOW) >= p.w2.at) applyOther(p, p.w2.act, 2);
+    });
+  }
+}
+
+function enterWave(w){
+  if (w==='wave1'){
+    addLog('Дедлайн наступил. Началась первая волна: у каждого желтого 2 дня, чтобы ответить.', true);
+    render();
+  }
+  if (w==='wave2'){
+    people.forEach(p=>{
+      if (p.status==='pending'){
+        p.status='orange';
+        if (p.me){ confirmingNo=false; addLog('Вы не ответили за 2 дня — плашка стала оранжевой. Началась вторая волна.', true); }
+        else addLog(`ID ${p.id} не ответил — оранжевый, вторая волна.`);
+      }
+    });
+    render();
+  }
+  if (w==='done'){
+    people.filter(p=>p.status==='orange').forEach(p=>{
+      if (p.me){ confirmingNo=false; p.status='missed'; p.reason='ignored'; }
+      else remove(p);
+    });
+    addLog('Симуляция завершена.', true);
+    setPlaying(false);
+    render();
+  }
+}
+
+function applyOther(p, act, wave){
+  if (act==='yes'){ enroll(p); addLog(`ID ${p.id} дал согласие — зелёный.`); render(); }
+  else if (act==='no'){ addLog(`ID ${p.id} отказался от платного места — убран из списка.`); remove(p); }
+}
+
+/* ================= интерфейс ================= */
+function fmt(totalMin){
+  totalMin = Math.max(0, Math.ceil(totalMin));
+  return { d: Math.floor(totalMin/DAY), h: Math.floor(totalMin%DAY/HOUR), m: totalMin%HOUR };
+}
+const pad = n => String(n).padStart(2,'0');
+function bigHTML(t, cls){
+  const f = fmt(t);
+  return `<div class="big ${cls||''}" id="big">
+    <div class="unit"><b>${pad(f.d)}</b><span>дн</span></div>
+    <div class="unit"><b>${pad(f.h)}</b><span>ч</span></div>
+    <div class="unit"><b>${pad(f.m)}</b><span>мин</span></div></div>`;
+}
+function tickUI(){
+  const w = waveOf(sim);
+  let label, left, cls = '';
+  if (w==='wait'){ label='До дедлайна подачи согласий'; left = T0 - sim; }
+  else if (w==='wave1'){ label='Первая волна — время на ответ'; left = T0+WINDOW - sim; cls='urgent'; }
+  else if (w==='wave2'){ label='Вторая волна — время на ответ'; left = T0+2*WINDOW - sim; cls='urgent'; }
+  else { label='Приём согласий завершён'; left = 0; cls='done'; }
+  document.getElementById('phase').textContent = label;
+  document.getElementById('big').outerHTML = bigHTML(left, cls);
+  document.getElementById('count').textContent = 'Участников в списке: ' + people.filter(p=>p.status!=='leaving' && p.status!=='missed').length;
+}
+
+const LABELS = {
+  enrolled: p => p.contract==='Да' ? '' : 'Дал согласие на платное место',
+  pending:  p => waveOf(sim)==='wait' ? 'Ожидает дедлайна' : 'Ожидает ответа',
+  orange:   p => 'Не ответил в первой волне',
+};
+const COLOR = {missed:'missed', enrolled:'green', pending:'yellow', orange:'orange', gray:'gray', red:'red', blue:'blue', violet:'violet'};
+
+function plural(n){
+  const a=n%10, b=n%100;
+  if (a===1 && b!==11) return 'балл';
+  if (a>=2 && a<=4 && (b<10||b>=20)) return 'балла';
+  return 'баллов';
+}
+function askHTML(p){
+  const second = p.status==='orange';
+  if (confirmingNo){
+    return `<div class="ask">
+      <p class="warn">Нажимая на «Нет» вы отказываетесь от платного места.</p>
+      <p class="sub">После подтверждения вас уберут из списка.</p>
+      <div class="btns">
+        <button class="btn-danger" data-act="no-confirm">Да, отказываюсь</button>
+        <button class="btn-back" data-act="no-back">Назад</button>
+      </div></div>`;
+  }
+  return `<div class="ask">
+    <p>Вы даёте согласие на обучение на платном месте?</p>
+    <p class="sub">${second ? 'Вторая волна: это последняя возможность ответить.' : 'Первая волна: на ответ даётся 2 дня.'}</p>
+    <div class="btns">
+      <button class="btn-yes" data-act="yes">Да</button>
+      <button class="btn-no" data-act="no">Нет</button>
+    </div></div>`;
+}
+
+function render(){
+  const list = [...people].sort((a,b)=> (a.status==='missed')-(b.status==='missed') || b.score-a.score);
+  let sectionShown = false;
+  let rank = 0;
+  const html = list.map(p=>{
+    const leaving = p.status==='leaving';
+    const missed = p.status==='missed';
+    if (!leaving && !missed) rank++;
+    const st = leaving ? p.prev : p.status;
+    const color = COLOR[st];
+    const inactive = ['gray','red','blue','violet','missed'].includes(st);
+    const tag = missed ? (p.reason==='no' ? 'Не успели: вы отказались от платного места' : 'Не успели: время на ответ вышло') : inactive ? p.note : (LABELS[st] ? LABELS[st](p) : '');
+    const showAsk = p.me && !leaving && meAwaiting();
+    const sect = (missed && !sectionShown) ? (sectionShown=true, '<div class="sect">Не успели</div>') : '';
+    return sect + `<div class="row ${color} ${inactive?'inactive':''} ${p.me?'me':''} ${leaving?'leaving':''}">
+      <div class="n">${leaving?'':missed?'—':rank}</div>
+      <div class="meta">
+        <span class="k">ID:</span> <a href="#" onclick="return false">${p.id}</a>${p.me?'<span class="me-badge">Это вы</span>':''}<br>
+        <span class="k">Приоритет:</span> ${p.prio}<br>
+        <span class="k">Наличие подписанного договора:</span> ${p.contract}<br>
+        ${p.program}
+        ${tag ? `<span class="tag">${tag}</span>` : ''}
+      </div>
+      <div class="score">${p.score} ${plural(p.score)}</div>
+      ${showAsk ? askHTML(p) : ''}
+    </div>`;
+  }).join('');
+  document.getElementById('list').innerHTML = html;
+  tickUI();
+}
+
+function addLog(){}  // журнал убран
+
+/* ================= управление ================= */
+function setPlaying(v){
+  playing = v; lastTs = null;
+  document.getElementById('play').textContent = v ? 'Пауза' : (waveOf(sim)==='done' ? 'Старт' : 'Продолжить');
+  if (sim===0 && !v) document.getElementById('play').textContent = 'Старт';
+}
+function speedVal(){
+  const v = +document.getElementById('speed').value;
+  return v===0 ? 0 : Math.round(Math.pow(10, v/25));      // минут симуляции в секунду
+}
+function speedText(){
+  const s = speedVal();
+  if (s===0) return 'остановлено';
+  const perSec = s>=DAY ? (s/DAY).toFixed(1).replace('.0','')+' дн/с' : s>=HOUR ? (s/HOUR).toFixed(1).replace('.0','')+' ч/с' : s+' мин/с';
+  return perSec;
+}
+document.getElementById('speed').addEventListener('input', ()=>{ document.getElementById('speedOut').textContent = speedText(); });
+document.getElementById('speedOut').textContent = speedText();
+
+document.getElementById('play').addEventListener('click', ()=>{
+  if (waveOf(sim)==='done'){ init(); }
+  setPlaying(!playing);
+});
+document.getElementById('reset').addEventListener('click', ()=>{ init(); });
+
+document.getElementById('list').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a==='yes') userYes();
+  if (a==='no') userNoAsk();
+  if (a==='no-back') userNoBack();
+  if (a==='no-confirm') userNoConfirm();
+});
+
+function loop(ts){
+  if (playing){
+    if (lastTs==null) lastTs = ts;
+    const dt = Math.min((ts-lastTs)/1000, 0.25); lastTs = ts;
+    const s = speedVal();
+    if (s>0){
+      /* пока ждём ответа пользователя после паузы — время не идёт само */
+      advance(sim + s*dt);
+      tickUI();
+    }
+  }
+  requestAnimationFrame(loop);
+}
+init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
